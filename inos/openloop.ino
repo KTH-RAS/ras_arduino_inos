@@ -1,6 +1,6 @@
 /*
  *
- * KTH_Robot13_openLoop.ino
+ * openloop.ino
  * --------------------
  * Copyright : (c) 2013, Germain Haessig <germain.haessig@ens-cachan.fr>
  * Licence   : BSD3
@@ -15,20 +15,22 @@
  * Send back the encoders change when receive a post on "/motion/Speed"
  *
  * Subscribes on topics :
- *      | "/motion/Speed"        to receive speed instructions
- *      | "/actuator/Servo"      to receive servo position
+ *      | "/arduino/pwm" (msg type: ras_arduino_msgs/PWM):                  receives PWM motor commands
+ *      | "/arduino/servo_motors" (msg type: ras_arduino_msgs/ServoMotors):   receives servo position commands
  *
  * Publishes on topics :
- *      | "/motion/Encoders"      send Encoders change
- *      | "/sensors/ADC"          send ADC values, including battery voltage
+ *      | "/arduino/encoders"         (msg type: ras_arduino_msgs/Encoders):         sends Encoder values
+ *      | "/arduino/adc"              (msg type: ras_arduino_msgs/ADC):              sends ADC values
+ *      | "/arduino/battery_status"    (msg type: ras_arduino_msgs/BatteryStatus):              sends battery voltage
  */
 
 
 #include <ros.h>
-#include <differential_drive/PWM.h>
-#include <differential_drive/Encoders.h>
-#include <differential_drive/AnalogC.h>
-#include <differential_drive/Servomotors.h>
+#include <ras_arduino_msgs/PWM.h>
+#include <ras_arduino_msgs/ServoMotors.h>
+#include <ras_arduino_msgs/Encoders.h>
+#include <ras_arduino_msgs/ADC.h>
+#include <ras_arduino_msgs/BatteryStatus.h>
 
 #include <Motors.h>
 #include <math.h>
@@ -84,14 +86,16 @@ int cpt = 0;
 /* ROS Use */
 ros::NodeHandle  nh;
 
-differential_drive::Encoders imlost ;
-differential_drive::AnalogC Amsg ;
+ras_arduino_msgs::Encoders imlost ;
+ras_arduino_msgs::ADC adc_msg ;
+ras_arduino_msgs::BatteryStatus battery_status_msg;
 
-ros::Publisher p("/motion/Encoders", &imlost);  // Create a publisher to "/motion/Encoders" topic
-ros::Publisher sensor("/sensors/ADC", &Amsg);  // Create a publisher to "/sensors/ADC" topic
+ros::Publisher p("/arduino/Encoders", &imlost);  // Create a publisher to "/arduino/Encoders" topic
+ros::Publisher adc_publisher("/arduino/ADC", &adc_msg);  // Create a publisher to "/arduino/ADC" topic
+ros::Publisher battery_status_publisher("/arduino/ADC", &adc_msg);  // Create a publisher to "/arduino/BatteryStatus" topic
 
 /* Subscriber Callback */
-void messagePWM( const differential_drive::PWM &cmd_msg){
+void pwmCallback( const ras_arduino_msgs::PWM &cmd_msg){
   /* store the time for Watchdog */
   wdtime = millis() ;  
   
@@ -125,17 +129,17 @@ void messagePWM( const differential_drive::PWM &cmd_msg){
   encoder2_old = encoder2_loc ; 
 }
 
-void messageServo(const differential_drive::Servomotors& params)  {
+void servoCallback(const ras_arduino_msgs::ServoMotors& params)  {
   for(int i=0;i<8;i++) {
            servo[i].write(params.servoangle[i]);
   }
 }
 
-/* Create Subscriber to "/motion/Speed" topic. Callback function is messageSpeed */
-ros::Subscriber<differential_drive::PWM> subPWM("/motion/PWM", &messagePWM);
+/* Create Subscriber to "/arduino/pwm" topic. Callback function is messageSpeed */
+ros::Subscriber<ras_arduino_msgs::PWM> pwm_subscriber("/arduino/pwm", &pwmCallback);
 
-/* Create Subscriber to "/actuator/Servo" topic. Callback function is messageServo */
-ros::Subscriber<differential_drive::Servomotors> subServo("/actuator/Servo", &messageServo);
+/* Create Subscriber to "/arduino/servo_motors" topic. Callback function is messageServo */
+ros::Subscriber<ras_arduino_msgs::ServoMotors> servo_motors_subscriber("/arduino/servo_motors", &servoCallback);
 
 void hello_world()  {
   for(int m=0;m<6;m++)  {
@@ -188,7 +192,7 @@ void setup()  {
          
          nh.advertise(p);  // advertise on p
          
-         nh.advertise(sensor);  // advertise on sensor
+         nh.advertise(adc_publisher);  // advertise on adc_publisher
          
          nh.subscribe(subPWM);  // Subscribe 
          nh.subscribe(subServo);  // Subscribe 
@@ -220,17 +224,17 @@ void loop()  {
   /* Read IR sensors value every 100ms */
   if(millis()-t_ADC>100)
   { 
-    Amsg.ch1 = analogRead(A8);
-    Amsg.ch2 = analogRead(A9);
-    Amsg.ch3 = analogRead(A10);
-    Amsg.ch4 = analogRead(A11);
-    Amsg.ch5 = analogRead(A12);
-    Amsg.ch6 = analogRead(A13);
-    Amsg.ch7 = analogRead(A14);
-    Amsg.ch8 = analogRead(A15);  
+    adc_msg.ch1 = analogRead(A8);
+    adc_msg.ch2 = analogRead(A9);
+    adc_msg.ch3 = analogRead(A10);
+    adc_msg.ch4 = analogRead(A11);
+    adc_msg.ch5 = analogRead(A12);
+    adc_msg.ch6 = analogRead(A13);
+    adc_msg.ch7 = analogRead(A14);
+    adc_msg.ch8 = analogRead(A15);  
     
     /* Publish sensor value */
-    sensor.publish(&Amsg);
+    adc_publisher.publish(&adc_msg);
     t_ADC = millis();
   }
   
@@ -239,10 +243,11 @@ void loop()  {
     float v2 = analogRead(A6)*0.0049*2.9583;
     float v3 = analogRead(A5)*0.0049*2.9583;
     
-    Amsg.cell1 = v1;
-    Amsg.cell2 = v2 - v1; 
-    Amsg.cell3 = v3 - v2;
-    Amsg.on_batt = digitalRead(10);
+    battery_status_msg.cell1 = v1;
+    battery_status_msg.cell2 = v2 - v1; 
+    battery_status_msg.cell3 = v3 - v2;
+    battery_status_msg.on_batt = digitalRead(10);
+    battery_status_publisher.publish(&battery_status_msg);
     
     for(int m=0;m<floor((v3-seuil_batt)*4);m++)  {
       digitalWrite(led_pin[m],HIGH);
@@ -251,11 +256,11 @@ void loop()  {
       digitalWrite(led_pin[m],LOW);
     }
     
-    if((Amsg.cell1<seuil_cell || Amsg.cell2<seuil_cell || Amsg.cell3<seuil_cell) && v1>2)  {
+    if((battery_status_msg.cell1<seuil_cell || battery_status_msg.cell2<seuil_cell || battery_status_msg.cell3<seuil_cell) && v1>2)  {
       low_batt = true ;
     }
     
-    if(low_batt && ((Amsg.cell1>seuil_cell+0.2 || Amsg.cell2>seuil_cell+0.2 || Amsg.cell3>seuil_cell+0.2) || v1<2))  {
+    if(low_batt && ((battery_status_msg.cell1>seuil_cell+0.2 || battery_status_msg.cell2>seuil_cell+0.2 || battery_status_msg.cell3>seuil_cell+0.2) || v1<2))  {
       low_batt = false;
     }
     
