@@ -21,7 +21,7 @@
  * Publishes on topics :
  *      | "/arduino/encoders"         (msg type: ras_arduino_msgs/Encoders):         sends Encoder values
  *      | "/arduino/adc"              (msg type: ras_arduino_msgs/ADC):              sends ADC values
- *      | "/arduino/battery_status"    (msg type: ras_arduino_msgs/BatteryStatus):              sends battery voltage
+ *      | "/arduino/battery_status"   (msg type: ras_arduino_msgs/BatteryStatus):    sends battery voltage
  */
 
 
@@ -86,13 +86,13 @@ int cpt = 0;
 /* ROS Use */
 ros::NodeHandle  nh;
 
-ras_arduino_msgs::Encoders imlost ;
+ras_arduino_msgs::Encoders encoders_msg ;
 ras_arduino_msgs::ADC adc_msg ;
 ras_arduino_msgs::BatteryStatus battery_status_msg;
 
-ros::Publisher p("/arduino/Encoders", &imlost);  // Create a publisher to "/arduino/Encoders" topic
-ros::Publisher adc_publisher("/arduino/ADC", &adc_msg);  // Create a publisher to "/arduino/ADC" topic
-ros::Publisher battery_status_publisher("/arduino/ADC", &adc_msg);  // Create a publisher to "/arduino/BatteryStatus" topic
+ros::Publisher encoders_publisher("/arduino/encoders", &encoders_msg);  // Create a publisher to "/arduino/encoders" topic
+ros::Publisher adc_publisher("/arduino/adc", &adc_msg);  // Create a publisher to "/arduino/adc" topic
+ros::Publisher battery_status_publisher("/arduino/battery_status", &battery_status_msg);  // Create a publisher to "/arduino/battery_status" topic
 
 /* Subscriber Callback */
 void pwmCallback( const ras_arduino_msgs::PWM &cmd_msg){
@@ -107,13 +107,13 @@ void pwmCallback( const ras_arduino_msgs::PWM &cmd_msg){
   encoder1_loc = encoder1 ;
   encoder2_loc = encoder2 ;
   
-  imlost.encoder1 = encoder1;
-  imlost.encoder2 = encoder2;
-  imlost.delta_encoder1 = encoder1_loc-encoder1_old ;
-  imlost.delta_encoder2 = encoder2_loc-encoder2_old ;
+  encoders_msg.encoder1 = encoder1;
+  encoders_msg.encoder2 = encoder2;
+  encoders_msg.delta_encoder1 = encoder1_loc-encoder1_old ;
+  encoders_msg.delta_encoder2 = encoder2_loc-encoder2_old ;
   
-  imlost.timestamp = time - time_old ;
-  p.publish(&imlost);
+  encoders_msg.timestamp = time - time_old ;
+  encoders_publisher.publish(&encoders_msg);
   
   /* get the speed from message and apply it */
   MotorA.Set_speed(cmd_msg.PWM1);
@@ -190,12 +190,12 @@ void setup()  {
          /* Initialize ROS stuff */
          nh.initNode();  // initialize node
          
-         nh.advertise(p);  // advertise on p
+         nh.advertise(encoders_publisher);  // advertise on /arduino/encoders
+         nh.advertise(adc_publisher);  // advertise on /arduino/adc
+         nh.advertise(battery_status_publisher);  // advertise on /arduino/battery_status
          
-         nh.advertise(adc_publisher);  // advertise on adc_publisher
-         
-         nh.subscribe(subPWM);  // Subscribe 
-         nh.subscribe(subServo);  // Subscribe 
+         nh.subscribe(pwm_subscriber);  // Subscribe to /arduino/pwm
+         nh.subscribe(servo_motors_subscriber);  // Subscribe to /arduino/servo_motors
          
          /* Advertise booting */
          hello_world();
@@ -247,7 +247,6 @@ void loop()  {
     battery_status_msg.cell2 = v2 - v1; 
     battery_status_msg.cell3 = v3 - v2;
     battery_status_msg.on_batt = digitalRead(10);
-    battery_status_publisher.publish(&battery_status_msg);
     
     for(int m=0;m<floor((v3-seuil_batt)*4);m++)  {
       digitalWrite(led_pin[m],HIGH);
@@ -268,8 +267,8 @@ void loop()  {
       tone(7,440,500); 
     }
 
+    battery_status_publisher.publish(&battery_status_msg);
     t = millis();
-
   }
     
 }

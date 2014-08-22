@@ -1,6 +1,6 @@
 /*
  *
- * KTH_Robot13_rev2.ino
+ * closeloop.ino
  * --------------------
  * Copyright : (c) 2013, Germain Haessig <germain.haessig@ens-cachan.fr>
  * Licence   : BSD3
@@ -15,23 +15,26 @@
  * by using the "/human/Parameters" topic 
  *
  * Subscribes on topics :
- *      | "/motion/Speed"        to receive speed instructions (rad/s)
- *      | "/human/Parameters"    to receive parameters
- *      | "/actuator/Servo"      to receive servo desired position
+ *      | "/arduino/wheel_angular_velocities"   (msg type: ras_arduino_msgs/WheelAngularVelocities)   to receive speed instructions (rad/s)
+ *      | "/arduino/controller_parameters"      (msg type: ras_arduino_msgs/ControllerParams)         to receive parameters
+ *      | "/arduino/servo_motors"               (msg type: ras_arduino_msgs/ServoMotors)              to receive servo desired position
  *
  * Publishes on topics :
- *      | "/motion/Odometry"      send odometry
- *      | "/sensors/ADC"          send ADC values, including battery voltage
+ *      | "/arduino/encoders"         (msg type: ras_arduino_msgs/Encoders):         sends Encoder values
+ *      | "/arduino/adc"              (msg type: ras_arduino_msgs/ADC):              sends ADC values
+ *      | "/arduino/battery_status"   (msg type: ras_arduino_msgs/BatteryStatus):    sends battery voltage
+ *      | "/arduino/odometry"         (msg type: ras_arduino_msgs/Odometry):         sends odometry
  */
 
 
 #include <ros.h>
-#include <differential_drive/Speed.h>
-#include <differential_drive/Odometry.h>
-#include <differential_drive/Encoders.h>
-#include <differential_drive/AnalogC.h>
-#include <differential_drive/Params.h>
-#include <differential_drive/Servomotors.h>
+#include <ras_arduino_msgs/WheelAngularVelocities.h>
+#include <ras_arduino_msgs/Odometry.h>
+#include <ras_arduino_msgs/Encoders.h>
+#include <ras_arduino_msgs/ADC.h>
+#include <ras_arduino_msgs/BatteryStatus.h>
+#include <ras_arduino_msgs/ControllerParams.h>
+#include <ras_arduino_msgs/ServoMotors.h>
 #include <std_msgs/Header.h>
 
 #include <stdint.h>
@@ -73,7 +76,7 @@ int led_pin[6] = {38,40,42,44,46,48};
 Motors MotorA(ChA_Dir,ChA_Pwm,ChA_Brk,ChA_CFb);  // schotch jaune
 Motors MotorB(ChB_Dir,ChB_Pwm,ChB_Brk,ChB_CFb);
 
-/* Servomotors definition */
+/* ServoMotors definition */
 Servo servo[8];
 char servo_pin[] = {22,24,26,28,30,32,34,36};
 
@@ -121,16 +124,18 @@ int k1=10;k2=150;k3=80;
 /* ROS Use */
 ros::NodeHandle  nh;
 
-differential_drive::Encoders imlost ;
-differential_drive::Odometry odom ;
-differential_drive::AnalogC Amsg ;
+ras_arduino_msgs::Encoders encoders_msg ;
+ras_arduino_msgs::Odometry odom_msg ;
+ras_arduino_msgs::ADC adc_msg ;
+ras_arduino_msgs::BatteryStatus battery_status_msg;
 
-ros::Publisher pubEnc("/motion/Encoders", &imlost);  // Create a publisher to "/motion/Encoders" topic
-ros::Publisher pubOdom("/motion/Odometry", &odom);  // Create a publisher to "/motion/Odometry" topic
-ros::Publisher sensor("/sensors/ADC", &Amsg);  // Create a publisher to "/sensors/ADC" topic
+ros::Publisher encoders_publisher("/arduino/encoders", &encoders_msg);  // Create a publisher to "/arduino/encoders" topic
+ros::Publisher odometry_publisher("/arduino/odometry", &odom_msg);  // Create a publisher to "/arduino/odometry" topic
+ros::Publisher adc_publisher("/arduino/adc", &adc_msg);  // Create a publisher to "/arduino/adc" topic
+ros::Publisher battery_status_publisher("/arduino/battery_status", &battery_status_msg);  // Create a publisher to "/arduino/battery_status" topic
 
 /* Subscriber Callback */
-void messageSpeed( const differential_drive::Speed& cmd_msg){
+void wheelAngularVelocitiesCallback( const ras_arduino_msgs::WheelAngularVelocities& cmd_msg){
   static int i = 0;
   static float array1[N],array2[N];
   static float loc1=0,loc2=0;
@@ -153,17 +158,17 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
   encoder1_loc = encoder1 ;
   encoder2_loc = encoder2 ;
 
-  imlost.encoder1 = encoder1;
-  imlost.encoder2 = encoder2;
-  imlost.delta_encoder1 = encoder1_loc-encoder1_old ;
-  imlost.delta_encoder2 = encoder2_loc-encoder2_old ;
+  encoders_msg.encoder1 = encoder1;
+  encoders_msg.encoder2 = encoder2;
+  encoders_msg.delta_encoder1 = encoder1_loc-encoder1_old ;
+  encoders_msg.delta_encoder2 = encoder2_loc-encoder2_old ;
   
   /* get the time since last call */
   t_enc_old = t_enc ;  
   t_enc = millis() ;
 
-  imlost.timestamp = t_enc - t_enc_old ;
-  pubEnc.publish(&imlost);
+  encoders_msg.timestamp = t_enc - t_enc_old ;
+  encoders_publisher.publish(&encoders_msg);
   
   MotorA.Read_speed(encoder1_loc,encoder1_old,Te);
   MotorB.Read_speed(encoder2_loc,encoder2_old,Te);
@@ -233,12 +238,12 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
     cpt = 0;
     
     /* Publish Odometry */
-    odom.x = x ;
-    odom.y = y;
-    odom.theta = theta ;       
+    odom_msg.x = x ;
+    odom_msg.y = y;
+    odom_msg.theta = theta ;       
     
     /* Publish Odometry and sensors value */
-    pubOdom.publish(&odom);
+    odometry_publisher.publish(&odom_msg);
   }
   
   /* Store encoders value */
@@ -246,7 +251,7 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
   encoder2_old = encoder2_loc ; 
 }
 
-void messageParameters(const differential_drive::Params& params)  {
+void controllerParamsCallback(const ras_arduino_msgs::ControllerParams& params)  {
   MotorA.Set_control_parameters(params.K,params.KI,params.INT_MAX,params.ticks);
   MotorB.Set_control_parameters(params.K,params.KI,params.INT_MAX,params.ticks);
   r = params.r;
@@ -255,20 +260,20 @@ void messageParameters(const differential_drive::Params& params)  {
   B = params.B;
 }
 
-void messageServo(const differential_drive::Servomotors& params)  {
+void servoMotorsCallback(const ras_arduino_msgs::ServoMotors& params)  {
   for(int i=0;i<8;i++) {
            servo[i].write(params.servoangle[i]);
   }
 }
 
-/* Create Subscriber to "/motion/Speed" topic. Callback function is messageSpeed */
-ros::Subscriber<differential_drive::Speed> subSpeed("/motion/Speed", &messageSpeed);
+/* Create Subscriber to "/arduino/wheel_angular_velocities" topic. Callback function is wheelAngularVelocitiesCallback */
+ros::Subscriber<ras_arduino_msgs::WheelAngularVelocities> wheel_angular_velocities_subscriber("/arduino/wheel_angular_velocities", &wheelAngularVelocitiesCallback);
 
-/* Create Subscriber to "/actuator/Servo" topic. Callback function is messageServo */
-ros::Subscriber<differential_drive::Servomotors> subServo("/actuator/Servo", &messageServo);
+/* Create Subscriber to "/arduino/servo_motors" topic. Callback function is servoMotorsCallback */
+ros::Subscriber<ras_arduino_msgs::ServoMotors> servo_motors_subscriber("/arduino/servo_motors", &servoMotorsCallback);
 
-/* Create Subscriber to "/motion/Parameters" topic. Callback function is messageParameters */
-ros::Subscriber<differential_drive::Params> subParam("/motion/Parameters", &messageParameters);
+/* Create Subscriber to "/arduino/controller_parameters" topic. Callback function is controllerParametersCallback */
+ros::Subscriber<ras_arduino_msgs::ControllerParams> controller_params_subscriber("/arduino/controller_params", &controllerParamsCallback);
 
 void hello_world()  {
   for(int m=0;m<6;m++)  {
@@ -319,13 +324,13 @@ void setup()  {
          /* Initialize ROS stuff */
          nh.initNode();  // initialize node
          
-         nh.advertise(pubEnc);  // advertise on pubEnc
-         nh.advertise(pubOdom);  // advertise on pubOdom         
-         nh.advertise(sensor);  // advertise on sensor
+         nh.advertise(encoders_publisher);  // advertise on /arduino/encoders
+         nh.advertise(odometry_publisher);  // advertise on /arduino/odometry         
+         nh.advertise(adc_publisher);  // advertise on /arduino/adc
          
-         nh.subscribe(subSpeed);  // Subscribe 
-         nh.subscribe(subServo);  // Subscribe 
-         nh.subscribe(subParam);  // Subscribe 
+         nh.subscribe(wheel_angular_velocities_subscriber);  // Subscribe to /arduino/wheel_angular_velocities
+         nh.subscribe(servo_motors_subscriber);  // Subscribe to /arduino/servo_motors
+         nh.subscribe(controller_params_subscriber);  // Subscribe to /arduino/controller_params
          
          /* Advertise booting */
          hello_world();
@@ -359,17 +364,17 @@ void loop()  {
   /* Read IR sensors value every 100ms */
   if(millis()-t_ADC>100)
   { 
-    Amsg.ch1 = analogRead(A8);
-    Amsg.ch2 = analogRead(A9);
-    Amsg.ch3 = analogRead(A10);
-    Amsg.ch4 = analogRead(A11);
-    Amsg.ch5 = analogRead(A12);
-    Amsg.ch6 = analogRead(A13);
-    Amsg.ch7 = analogRead(A14);
-    Amsg.ch8 = analogRead(A15);  
+    adc_msg.ch1 = analogRead(A8);
+    adc_msg.ch2 = analogRead(A9);
+    adc_msg.ch3 = analogRead(A10);
+    adc_msg.ch4 = analogRead(A11);
+    adc_msg.ch5 = analogRead(A12);
+    adc_msg.ch6 = analogRead(A13);
+    adc_msg.ch7 = analogRead(A14);
+    adc_msg.ch8 = analogRead(A15);  
     
     /* Publish sensor value */
-    sensor.publish(&Amsg);
+    adc_publisher.publish(&adc_msg);
     t_ADC = millis();
   }
 
@@ -378,10 +383,10 @@ void loop()  {
     float v2 = analogRead(A6)*0.0049*2.9583;
     float v3 = analogRead(A5)*0.0049*2.9583;
     
-    Amsg.cell1 = v1;
-    Amsg.cell2 = v2 - v1; 
-    Amsg.cell3 = v3 - v2;
-    Amsg.on_batt = digitalRead(10);
+    battery_status_msg.cell1 = v1;
+    battery_status_msg.cell2 = v2 - v1; 
+    battery_status_msg.cell3 = v3 - v2;
+    battery_status_msg.on_batt = digitalRead(10);
     
     for(int m=0;m<floor((v3-seuil_batt)*4);m++)  {
       digitalWrite(led_pin[m],HIGH);
@@ -390,11 +395,11 @@ void loop()  {
       digitalWrite(led_pin[m],LOW);
     }
     
-    if((Amsg.cell1<seuil_cell || Amsg.cell2<seuil_cell || Amsg.cell3<seuil_cell) && v1>2)  {
+    if((battery_status_msg.cell1<seuil_cell || battery_status_msg.cell2<seuil_cell || battery_status_msg.cell3<seuil_cell) && v1>2)  {
       low_batt = true ;
     }
     
-    if(low_batt && ((Amsg.cell1>seuil_cell+0.2 || Amsg.cell2>seuil_cell+0.2 || Amsg.cell3>seuil_cell+0.2) || v1<2))  {
+    if(low_batt && ((battery_status_msg.cell1>seuil_cell+0.2 || battery_status_msg.cell2>seuil_cell+0.2 || battery_status_msg.cell3>seuil_cell+0.2) || v1<2))  {
       low_batt = false;
     }
     
@@ -402,6 +407,7 @@ void loop()  {
       tone(7,440,500); 
     }
     
+    battery_status_publisher.publish(&battery_status_msg);
     t = millis();
   }
     
