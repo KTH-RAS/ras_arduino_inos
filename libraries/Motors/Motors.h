@@ -40,7 +40,7 @@ Motors(char dir_pin,char pwm_pin,char brk_pin,char cfb_pin);
  * Motors::Set_speed(int u)
  * Set the duty cycle of the PWM
  * parameter >
- * 		@ int u : duty cycle value, between 0 (no motion) and 255 (maximal speed)
+ * 		@ int u : duty cycle value, between -255 (maximal speed in negative direction) and 255 (maximal speedin positive direction). At 0 the motor is turned off
  * 		
  * 	Assuming that Vcc is you power supply voltage, voltage V applied to the motor is 
  * 	V = Vcc*u/255
