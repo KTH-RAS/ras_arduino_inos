@@ -20,7 +20,7 @@
  *
  * Publishes on topics :
  *      | "/arduino/encoders"         (msg type: ras_arduino_msgs/Encoders):         sends Encoder values
- *      | "/arduino/adc"              (msg type: ras_arduino_msgs/ADC):              sends ADC values
+ *      | "/arduino/adc"              (msg type: ras_arduino_msgs/ADConverter):              sends ADC values
  *      | "/arduino/battery_status"   (msg type: ras_arduino_msgs/BatteryStatus):    sends battery voltage
  */
 
@@ -29,7 +29,7 @@
 #include <ras_arduino_msgs/PWM.h>
 #include <ras_arduino_msgs/ServoMotors.h>
 #include <ras_arduino_msgs/Encoders.h>
-#include <ras_arduino_msgs/ADC.h>
+#include <ras_arduino_msgs/ADConverter.h>
 #include <ras_arduino_msgs/BatteryStatus.h>
 
 #include <Motors.h>
@@ -87,7 +87,7 @@ int cpt = 0;
 ros::NodeHandle  nh;
 
 ras_arduino_msgs::Encoders encoders_msg ;
-ras_arduino_msgs::ADC adc_msg ;
+ras_arduino_msgs::ADConverter adc_msg ;
 ras_arduino_msgs::BatteryStatus battery_status_msg;
 
 ros::Publisher encoders_publisher("/arduino/encoders", &encoders_msg);  // Create a publisher to "/arduino/encoders" topic
