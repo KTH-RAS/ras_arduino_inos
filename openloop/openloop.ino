@@ -62,6 +62,10 @@
 
 int led_pin[6] = {38,40,42,44,46,48};
 
+int red_pin = led_pin[3];
+int green_pin = led_pin[4];
+int blue_pin = led_pin[5];
+
 /* Motor objects creation */
 /* Please refer to "Motors.h" for further informations */
 Motors MotorA(ChA_Dir,ChA_Pwm,ChA_Brk,ChA_CFb);  // schotch jaune
@@ -179,6 +183,7 @@ void setup()  {
            pinMode(led_pin[i],OUTPUT);
          }
          pinMode(7,OUTPUT);
+         pinMode(10,INPUT);
          
          
          /* Configure servomotors pins */
@@ -239,20 +244,41 @@ void loop()  {
   }
   
     if(millis()-t > 1000)  {
-    float v1 = analogRead(A7)*0.0049*1.5106;
-    float v2 = analogRead(A6)*0.0049*2.9583;
-    float v3 = analogRead(A5)*0.0049*2.9583;
+   
+    float v_a7 = ((float) analogRead(A7))*0.0049;   
+    float v_a6 = ((float) analogRead(A6))*0.0049;
+    float v_a5 = ((float) analogRead(A5))*0.0049;
+    
+    float v1 = v_a7*1.5106;
+    float v2 = v_a6*2.9583;
+    float v3 = v_a5*2.9583;
     
     battery_status_msg.cell1 = v1;
     battery_status_msg.cell2 = v2 - v1; 
     battery_status_msg.cell3 = v3 - v2;
     battery_status_msg.on_batt = digitalRead(10);
     
-    for(int m=0;m<floor((v3-seuil_batt)*4);m++)  {
-      digitalWrite(led_pin[m],HIGH);
+    float led_level = floor((v3-seuil_batt)*4);
+    
+    if(led_level>=5.0)
+    {
+      digitalWrite(red_pin, LOW);
+      digitalWrite(green_pin, HIGH);
+      digitalWrite(blue_pin, LOW);
     }
-    for(int m=floor((v3-seuil_batt)*4);m<6;m++)  {
-      digitalWrite(led_pin[m],LOW);
+    
+    else if(led_level>=3.0)
+    {
+      digitalWrite(red_pin, HIGH);
+      digitalWrite(green_pin, HIGH);
+      digitalWrite(blue_pin, LOW);      
+    }
+    
+    else
+    {
+      digitalWrite(red_pin, HIGH);
+      digitalWrite(green_pin, LOW);
+      digitalWrite(blue_pin, LOW);   
     }
     
     if((battery_status_msg.cell1<seuil_cell || battery_status_msg.cell2<seuil_cell || battery_status_msg.cell3<seuil_cell) && v1>2)  {
@@ -260,6 +286,12 @@ void loop()  {
     }
     
     if(low_batt && ((battery_status_msg.cell1>seuil_cell+0.2 || battery_status_msg.cell2>seuil_cell+0.2 || battery_status_msg.cell3>seuil_cell+0.2) || v1<2))  {
+      low_batt = false;
+    }
+    
+    // in this case the balance connector is disconnected, put RED LED but don't beep all the time...
+    if(v_a6<0.2 && v_a5<0.2)
+    {
       low_batt = false;
     }
     
