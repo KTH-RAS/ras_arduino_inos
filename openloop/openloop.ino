@@ -226,8 +226,8 @@ void loop()  {
     wdtime = millis() ;
   }
 
-  /* Read IR sensors value every 100ms */
-  if(millis()-t_ADC>100)
+  /* Read IR sensors value every 50ms */
+  if(millis()-t_ADC>50)
   { 
     adc_msg.ch1 = analogRead(A8);
     adc_msg.ch2 = analogRead(A9);
